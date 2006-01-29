@@ -1,0 +1,16 @@
+rx_bytes=COUNTER
+rx_packets=COUNTER
+rx_errs=COUNTER
+rx_drop=COUNTER
+rx_fifo=COUNTER
+rx_frame=COUNTER
+rx_compressed=COUNTER
+rx_multicast=COUNTER
+tx_bytes=COUNTER
+tx_packets=COUNTER
+tx_errs=COUNTER
+tx_drop=COUNTER
+tx_fifo=COUNTER
+tx_calls=COUNTER
+tx_carrier=COUNTER
+tx_compressed=COUNTER

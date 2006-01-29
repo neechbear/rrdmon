@@ -1,0 +1,5 @@
+user=GAUGE
+nice=GAUGE
+sys=GAUGE
+iowait=GAUGE
+idle=GAUGE

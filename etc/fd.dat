@@ -1,0 +1,3 @@
+TotalAllocated=GAUGE
+TotalFreeAllocated=GAUGE
+MaximumOpen=GAUGE

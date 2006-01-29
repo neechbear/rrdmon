@@ -1,0 +1,107 @@
+#!/usr/bin/perl -w
+# $Id: RRDMonGraph,v 1.2 2005/12/30 00:13:10 nicolaw Exp $
+
+use strict;
+use lib qw(/home/system/rrdtool/lib/perl/5.8.5/i386-linux-thread-multi /home/system/RRDMon/lib);
+use RRDs;
+use File::Basename qw(basename);
+use vars qw($VERSION $SELF);
+
+$| = 1;
+($SELF = $0) =~ s|^.*/||;
+$VERSION = sprintf('%d.%02d', q$Revision: 1.2 $ =~ /(\d+)/g);
+
+my $rrd_file = shift;
+die "RRD store '$rrd_file' does not exist!\n" unless -f $rrd_file;
+
+create_graph($rrd_file, 'daily');
+create_graph($rrd_file, 'weekly');
+create_graph($rrd_file, 'monthly');
+create_graph($rrd_file, 'annual');
+
+sub create_graph {
+	my ($rrd_file,$type) = @_;
+
+	my $start = time-(60*60*48);
+	$start = time-(60*60*24*8) if $type =~ /week/i;
+	$start = time-(60*60*24*62) if $type =~ /month/i;
+	$start = time-(60*60*24*370) if $type =~ /annual|year/i;
+
+	my $title = basename($rrd_file).' - ';
+	$title .= '[Daily Graph: 5 min average]' if $type =~ /daily|day/i;
+	$title .= '[Weekly Graph: 30 min average]' if $type =~ /week/i;
+	$title .= '[Monthly Graph: 2 hour average]' if $type =~ /month/i;
+	$title .= '[Annual Graph: 1 day average]' if $type =~ /annual|year/i;
+
+	my $image_file = basename($rrd_file).".$type.png";
+
+	#"--alt-autoscale-max",
+	my @cmd = ($image_file,
+				"--end=".time(),
+				"--start=$start",
+				"--imgformat=PNG",
+				"--title=$title",
+#				"--vertical-label=Value",
+				"--alt-autoscale",
+				"--units-exponent=0",
+				"--height=200",
+				"--width=680",
+				"--alt-y-grid",
+				"--color=BACK#F5F5FF",
+				"--color=SHADEA#C8C8FF",
+				"--color=SHADEB#9696BE",
+				"--color=ARROW#61B51B",
+				"--color=GRID#404852",
+				"--color=MGRID#67C6DE",
+			);
+
+	my @ds;
+	foreach (keys %{RRDs::info($rrd_file)}) {
+		if (/^ds\[(.+)?\]\.type$/) {
+			push @ds, $1;
+		}
+	}
+
+	for my $ds (@ds) {
+		push @cmd, sprintf('DEF:%s=%s:%s:AVERAGE',$ds,$rrd_file,$ds);
+	}
+
+	my @colours = qw(
+			ffff55 ff0055 ff00ff aa00ff 00aa55 00aa00 55ffaa 000000 aa0000 0055ff ff0000 aaff55 aa0055 55aa00 ffff00 ff5500
+			ff55ff ff5555 ffaa00 550055 00ff00 5555aa aa00aa aaaaff 00ffaa 55aa55 aa5555 ff00aa aaaa55 aaff00 5555ff aaffaa
+			0000aa 5500aa 55ffff 55ff55 ffaa55 55aaff 555500 005555 00ffff 005500 aaaa00 aa55aa aaaaaa 00aaff 00ff55 55aaaa
+			55ff00 5500ff 00aaaa 000055 550000 0000ff ff55aa 555555 aa5500 ffaaaa aa55ff 0055aa
+		);
+
+#	push @cmd, sprintf('COMMENT:%28s min/max/cur %29s min/max/cur %29s min/max/cur\l','','','');
+
+#	my $i = 0;
+	for my $ds (@ds) {
+#		$i++;
+		push @cmd, sprintf('%s:%s#%s:%-22s',
+				'LINE1',
+				$ds,
+				shift(@colours),
+				@ds
+			);
+
+#		if ($i == 10) {
+#			push @cmd, sprintf('GPRINT:%s:MIN:%%5.0lf\g',$ds);
+#			push @cmd, sprintf('GPRINT:%s:MAX:%%5.0lf\g',$ds);
+#			push @cmd, sprintf('GPRINT:%s:LAST:%%5.0lf',$ds);
+#		} else {
+#			push @cmd, sprintf('GPRINT:%s:MIN:%%4.0lf\g',$ds);
+#			push @cmd, sprintf('GPRINT:%s:MAX:%%4.0lf\g',$ds);
+#			push @cmd, sprintf('GPRINT:%s:LAST:%%4.0lf',$ds);
+#		}
+	}
+
+#	push @cmd, ('COMMENT:\s','COMMENT:\s','COMMENT:\s');
+#	push @cmd, 'COMMENT:Last updated: '.localtime().'\r';
+
+	RRDs::graph(@cmd);
+	my $error = RRDs::error;
+	die($error) if $error;
+}
+
+

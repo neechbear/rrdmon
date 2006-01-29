@@ -1,0 +1,132 @@
+#!/usr/bin/perl -w
+# $Id: RRDMon,v 1.8 2005/11/27 17:42:52 nicolaw Exp $
+
+use strict;
+use warnings;
+use English;
+
+use constant rrdupdate_path => '/home/system/rrdtool/bin/rrdtool';
+use constant rrdtool_path => '/home/system/rrdtool/bin/rrdupdate';
+
+use lib qw(/home/system/rrdtool/lib/perl/5.8.5/i386-linux-thread-multi /home/system/RRDMon/lib);
+use RRDTool::Managed ();
+use RRDs ();
+
+use vars qw($VERSION $SELF);
+$OUTPUT_AUTOFLUSH = 1;
+$VERSION = sprintf('%d.%02d', q$Revision: 1.8 $ =~ /(\d+)/g);
+($SELF = $PROGRAM_NAME) =~ s/.*\///;
+$PROGRAM_NAME = 'RRDMon';
+
+our $ROOT = '/home/system/RRDMon';
+
+die "Something isn't right\n" unless -d $ROOT;
+die "I don't know who you are\n" unless $ENV{REMOTE_HOST};
+die "You're being naughty\n" if $ENV{REMOTE_HOST} =~ /\.\./;
+die "You're being naughty\n" unless $ENV{REMOTE_HOST} =~ /^[0-9a-z\.\-]+$/i;
+
+my $input = '';
+my $string = '';
+while (sysread STDIN,$input,1) {
+	if ($input =~ /\n|\cM|\r/) {
+		if (length($string)) {
+			last if $string =~ /quit/;
+			process_line($string);
+			$string = '';
+		}
+	} else {
+		$string .= $input;
+	}
+}
+
+sub process_line {
+	local $_ = join(' ',@_);
+	if (my ($type,$subtype,$data) = /^([a-z0-9\-_]+):([a-z0-9\-_]+):(.+)$/i) {
+		my $host_dir = "$ROOT/var/rrd/$ENV{REMOTE_HOST}";
+		mkdir($host_dir) unless -d $host_dir;
+	
+		my $rrd_dir = "$host_dir/$type";
+		mkdir($rrd_dir) unless -d $rrd_dir;
+
+		my $type_dat = read_type_dat($type);
+		my $mgr = RRDTool::Managed->new(
+				repository_path => $rrd_dir,
+				dynamic_ds => 1,
+				rrdtool_path => rrdtool_path,
+				rrdupdate_path => rrdupdate_path,
+			);
+
+		my $store;
+		unless ($store = $mgr->open("$subtype.rrd")) {
+			$store = $mgr->create("$subtype.rrd",
+					step => 300,
+					ds => [ map { { name => $_, type => $type_dat->{$_} } } keys %{$type_dat} ],
+				);
+		}
+
+		if ($store) {
+			my @ds; my @data;
+			for my $pair (split(/\s*,\s*/,$data)) {
+				next unless $pair =~ /\s*\=\s*/;
+				my ($k,$v) = split(/\s*\=\s*/,$pair);
+				next unless exists $type_dat->{$k};
+				next unless length($k) && length($v);
+				push @ds, $k;
+				push @data, $v;
+			}
+
+			$store->store(
+					time => undef,
+					ds => [ (@ds) ],
+					data => [ (@data) ]
+				) if (@ds && @data);
+
+		} else {
+			syswrite STDOUT,"WARNING: Failed to open store\n";
+		}
+
+	} else {
+		syswrite STDOUT,"I do not know how to process '$_'\n";
+	}
+}
+
+sub read_type_dat {
+	my $type = shift;
+	if (open(DAT,"<$ROOT/etc/$type.dat")) {
+		my %dat;
+		while (local $_ = <DAT>) {
+			chomp;
+			my ($k,$v) = split(/\s*\=\s*/,$_);
+			$dat{$k} = $v;
+		}
+		close(DAT);
+		return \%dat;
+	} else {
+		syswrite STDOUT,"WARNING: I don't know what to do with $type?\n";
+	}
+}
+
+
+
+=pod
+
+=head1 NAME
+
+RRDMon - XInetD Listener to Collect and Store Data to RRD Stores
+
+=head1 VERSION
+
+$Id: RRDMon,v 1.8 2005/11/27 17:42:52 nicolaw Exp $
+
+=head1 AUTHOR
+
+Nicola Elizabeth Worthington <nicolaw@lilacup.2x4b.com>
+
+$Author: nicolaw $
+
+=cut
+
+
+
+
+

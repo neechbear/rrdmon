@@ -1,0 +1,9 @@
+#!/bin/bash
+# $Id: RRDMonSender,v 1.4 2005/11/27 15:50:35 nicolaw Exp $
+
+RRD_SERVER="rrd-mgt.gametrust.com"
+RRD_SERVER="10.235.14.77"
+
+cd /home/system/RRDMon/libexec && \
+(for i in *.sh;do ./$i;done;echo quit) | /usr/bin/nc $RRD_SERVER 10010 
+
